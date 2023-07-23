@@ -4,12 +4,13 @@
 #include <cstdlib>
 #include <cstring>
 
-#include <stdint.h>         // ...
+// #include <stdint.h>         // ...
 #include <errno.h>          // Error handling
+#include <fcntl.h>          // File descriptor control
 #include <unistd.h>         // Read & write functions
 #include <arpa/inet.h>      // Internet operations
-#include <sys/socket.h>     // ...
-#include <netinet/ip.h>     // ...
+// #include <sys/socket.h>     // ...
+// #include <netinet/ip.h>     // ...
 
 // EXPORT
 const size_t k_max_msg = 4096;
@@ -51,6 +52,25 @@ static int32_t write_all(int fd, const char *buf, size_t n) {
         buf += rv;
     }
     return 0;
+}
+
+// Set to nonblocking
+static void fd_set_nb(int fd) {
+    errno = 0;
+    // Get fd status flags
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (errno) {
+        die("fcntl error");
+        return;
+    }
+
+    // Set variable flags to nonblocking & set fd
+    flags |= O_NONBLOCK;
+
+    errno = 0;
+    (void)fcntl(fd, F_SETFL, flags);
+    if (errno)
+        die("fcntl error");
 }
 
 /*  In order to process requests separately we create a request protocol
