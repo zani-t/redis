@@ -1,1 +1,3 @@
 .vscode/
+utils.cpp
+utils.hpp
