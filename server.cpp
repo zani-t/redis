@@ -253,8 +253,10 @@ static bool try_one_request(Conn *conn) {
 
     // Remove request from buffer
     size_t remain = conn->rbuf_size - 4 - len;
-    if (remain)
+    if (remain) {
+        // ** Memmove only before read (as opposed to every request) **
         memmove(conn->rbuf, &conn->rbuf[4 + len], remain);
+    }
     conn->rbuf_size = remain;
 
     // Change state
@@ -265,6 +267,7 @@ static bool try_one_request(Conn *conn) {
 }
 
 static void state_res(Conn *conn) {
+    // ** Buffer multiple responses and write once **
     while (try_flush_buffer(conn)) {}
 }
 
@@ -348,6 +351,7 @@ int main() {
         }
 
         // Poll for active fds
+        // ** Replace with epoll **
         int rv = poll(poll_args.data(), (nfds_t)poll_args.size(), 1000);
         if (rv < 0)
             die("poll");
