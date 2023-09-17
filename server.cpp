@@ -15,6 +15,13 @@
 // #include <sys/socket.h>     // ...
 // #include <netinet/ip.h>     // ...
 
+#include "hashtable.hpp"
+
+// Get pointer to Entry struct of which HNode is a member
+#define container_of(ptr, type, member) ({                  \
+    const typeof( ((type *)0)->member ) *__mptr = (ptr);    \
+    (type *)( (char *)__mptr - offsetof(type, member) );})
+
 // EXPORT
 const size_t k_max_msg = 4096;
 const size_t k_max_args = 1024;
@@ -43,6 +50,18 @@ struct Conn {
     size_t wbuf_sent = 0;
     uint8_t wbuf[4 + k_max_msg];
 };
+
+// Entry struct (intrusive data structure)
+struct Entry {
+    struct HNode node;
+    std::string key;
+    std::string val;
+};
+
+// Key space
+static struct {
+    HMap db;
+} g_data;
 
 // EXPORT
 static void msg(const char *msg) {
@@ -348,6 +367,7 @@ static bool try_fill_buffer(Conn *conn) {
     return (conn->state == STATE_REQ);
 }
 
+// ...
 static bool try_flush_buffer(Conn *conn) {
     ssize_t rv = 0;
     do {
@@ -377,10 +397,12 @@ static bool try_flush_buffer(Conn *conn) {
     return true;
 }
 
+// ...
 static void state_req(Conn *conn) {
     while (try_fill_buffer(conn)) {}
 }
 
+// ...
 static void state_res(Conn *conn) {
     // ** Buffer multiple responses and write once **
     while (try_flush_buffer(conn)) {}
@@ -394,6 +416,79 @@ static void connection_io(Conn *conn) {
         state_res(conn);
     else
         assert(0);
+}
+
+// Hash code generator
+static uint64_t str_hash(const uint8_t *data, size_t len) {
+    uint32_t h = 0x2A051586;
+    for (size_t i = 0; i < len; i++)
+        h = (h + data[i]) * 0x95CE45FE;
+    return h;
+}
+
+// Hash node data comparison
+static bool entry_eq(HNode *lhs, HNode *rhs) {
+    struct Entry *le = container_of(lhs, struct Entry, node);
+    struct Entry *re = container_of(rhs, struct Entry, node);
+    return lhs->hcode == rhs->hcode && le->key == re->key;
+}
+
+// ...
+static uint32_t do_get(
+    std::vector<std::string> &cmd, uint8_t *res, uint32_t *reslen)
+{
+    Entry key;
+    key.key.swap(cmd[1]);
+    key.node.hcode = str_hash((uint8_t *)key.key.data(), key.key.size());
+
+    HNode *node = hm_lookup(&g_data.db, &key.node, &entry_eq);
+    if (!node)
+        return RES_NX;
+    
+    const std::string &val = container_of(node, Entry, node)->val;
+    assert(val.size() <= k_max_msg);
+    memcpy(res, val.data(), val.size());
+    *reslen = (uint32_t)val.size();
+    return RES_OK;
+}
+
+static uint32_t do_set(
+    std::vector<std::string> &cmd, uint8_t *res, uint32_t *reslen)
+{
+    (void)res;
+    (void)reslen;
+
+    Entry key;
+    key.key.swap(cmd[1]);
+    key.node.hcode = str_hash((uint8_t *)key.key.data(), key.key.size());
+
+    HNode *node = hm_lookup(&g_data.db, &key.node, &entry_eq);
+    if (node)
+        container_of(node, Entry, node)->val.swap(cmd[2]);
+    else {
+        Entry *ent = new Entry();
+        ent->key.swap(key.key);
+        ent->node.hcode = key.node.hcode;
+        ent->val.swap(cmd[2]);
+        hm_insert(&g_data.db, &ent->node);
+    }
+    return RES_OK;
+}
+
+static uint32_t do_del (
+    std::vector<std::string> &cmd, uint8_t *res, uint32_t *reslen)
+{
+    (void)res;
+    (void)reslen;
+
+    Entry key;
+    key.key.swap(cmd[1]);
+    key.node.hcode = str_hash((uint8_t *)key.key.data(), key.key.size());
+
+    HNode *node = hm_pop(&g_data.db, &key.node, &entry_eq);
+    if (node)
+        delete container_of(node, Entry, node);
+    return RES_OK;
 }
 
 int main() {
