@@ -1,7 +1,7 @@
 #include <cassert>
 #include <stdlib.h>
 
-#include "hashtable.hpp"
+#include "hashtable.h"
 
 const size_t k_resizing_work = 128;
 const size_t k_max_load_factor = 8;
@@ -9,7 +9,7 @@ const size_t k_max_load_factor = 8;
 // Initialize - indexing done using bit mask & hash code*
 static void h_init(HTab *htab, size_t n) {
     // Assert size of hashtable n = 2^k & init array size n
-    assert(n > 0 && ((n - 1) & n == 0));
+    assert(n > 0 && ((n - 1) & (n == 0)));
     htab->tab = (HNode **)calloc(sizeof(HNode *), n);
     htab->mask = n - 1;
     htab->size = 0;
@@ -125,4 +125,15 @@ HNode *hm_pop(
     if (from)
         return h_detach(&hmap->ht2, from);
     return NULL;
+}
+
+size_t hm_size(HMap *hmap) {
+    return hmap->ht1.size + hmap->ht2.size;
+}
+
+void hm_destroy(HMap *hmap) {
+    assert(hmap->ht1.size + hmap->ht2.size == 0);
+    free(hmap->ht1.tab);
+    free(hmap->ht2.tab);
+    *hmap = HMap{};
 }
