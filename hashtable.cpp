@@ -1,3 +1,4 @@
+//*
 #include <cassert>
 #include <stdlib.h>
 
@@ -9,7 +10,7 @@ const size_t k_max_load_factor = 8;
 // Initialize - indexing done using bit mask & hash code*
 static void h_init(HTab *htab, size_t n) {
     // Assert size of hashtable n = 2^k & init array size n
-    assert(n > 0 && ((n - 1) & (n == 0)));
+    assert(n > 0 && ((n - 1) & n) == 0);
     htab->tab = (HNode **)calloc(sizeof(HNode *), n);
     htab->mask = n - 1;
     htab->size = 0;

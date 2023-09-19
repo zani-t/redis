@@ -26,12 +26,14 @@
 const size_t k_max_msg = 4096;
 const size_t k_max_args = 1024;
 
+// Connection state
 enum {
     STATE_REQ = 0,
     STATE_RES = 1,
     STATE_END = 2,
 };
 
+// ...
 enum {
     RES_OK = 0,
     RES_ERR = 1,
@@ -208,7 +210,7 @@ static bool entry_eq(HNode *lhs, HNode *rhs) {
 // Serialization protocol - allowing for one of multiple datatypes as response
 // Type - length - value
 
-static void out_nil(std::string out) {
+static void out_nil(std::string &out) {
     out.push_back(SER_NIL);
 }
 
@@ -365,7 +367,7 @@ static bool try_one_request(Conn *conn) {
     uint32_t wlen = (uint32_t)out.size();
     memcpy(&conn->wbuf[0], &wlen, 4);
     memcpy(&conn->wbuf[4], out.data(), out.size());
-    conn->wbuf_size  =  4 + len;
+    conn->wbuf_size = 4 + wlen;
 
     // Remove request from buffer
     size_t remain = conn->rbuf_size - 4 - len;
@@ -498,8 +500,7 @@ int main() {
     fd_set_nb(fd);                        // Set to nonblocking
     std::vector<struct pollfd> poll_args; // Poll request arguments - fd, [status of data], ?
 
-    /*  Event loop: General idea is to seach for active fds by polling and operate.
-          */
+    // Event loop: General idea is to seach for active fds by polling and operate.
     while (true) {
         poll_args.clear();
         // Listening [socket] fd in first position
