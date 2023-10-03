@@ -13,28 +13,7 @@
 // #include <sys/socket.h>     // ...
 // #include <netinet/ip.h>     // ...
 
-// EXPORT
-const size_t k_max_msg = 4096;
-
-// EXPORT
-// Serialization datatypes
-enum {
-    SER_NIL = 0,
-    SER_ERR = 1,
-    SER_STR = 2,
-    SER_INT = 3,
-    SER_ARR = 4,
-};
-
-static void msg(const char *msg) {
-    fprintf(stderr, "%s\n", msg);
-}
-
-static void die(const char *msg) {
-    int err = errno;
-    fprintf(stderr, "[%d], %s\n", err, msg);
-    abort();
-}
+#include "common.h"
 
 // Read n bytes from kernel [through several requests]
 static int32_t read_full(int fd, char *buf, size_t n) {

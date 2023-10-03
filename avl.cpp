@@ -1,19 +1,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-struct AVLNode {
-    uint32_t depth = 0; // Tree height
-    uint32_t cnt = 0; // Tree size
-    AVLNode *left = NULL;
-    AVLNode *right = NULL;
-    AVLNode *parent = NULL;
-};
-
-static void avl_init(AVLNode *node) {
-    node->depth = 1;
-    node->cnt = 1;
-    node->left = node->right = node->parent = NULL;
-}
+#include "avl.h"
 
 static uint32_t avl_depth(AVLNode *node) {
     return node ? node->depth : 0;
@@ -27,14 +15,14 @@ static uint32_t max(uint32_t lhs, uint32_t rhs) {
     return lhs < rhs ? rhs : lhs;
 }
 
+// Maintain depth and count fields
 static void avl_update(AVLNode *node) {
-    // Maintain depth and count fields
     node->depth = 1 + max(avl_depth(node->left), avl_depth(node->right));
     node->cnt = 1 + avl_cnt(node->left) + avl_cnt(node->right);
 }
 
+// Rotate left
 static AVLNode *rot_left(AVLNode *node) {
-    // Rotate left
     AVLNode *new_node = node->right;
     if (new_node->left)
         new_node->left->parent = node;
@@ -47,8 +35,8 @@ static AVLNode *rot_left(AVLNode *node) {
     return new_node;
 }
 
+// Rotate right
 static AVLNode *rot_right(AVLNode *node) {
-    // Rotate right
     AVLNode *new_node = node->left;
     if (new_node->right)
         new_node->right->parent = node;
@@ -61,22 +49,22 @@ static AVLNode *rot_right(AVLNode *node) {
     return new_node;
 }
 
+// Fix left excess hight
 static AVLNode *avl_fix_left(AVLNode *root) {
-    // Fix left excess hight
     if (avl_depth(root->left->left) < avl_depth(root->left->right))
         root->left = rot_left(root->left);
     return rot_right(root);
 }
 
+// Fix right excess height
 static AVLNode *avl_fix_right(AVLNode *root) {
-    // Fix right excess height
     if (avl_depth(root->right->right) < avl_depth(root->right->left))
         root->right = rot_right(root->right);
     return rot_left(root);
 }
 
-static AVLNode *avl_fix(AVLNode *node) {
-    // Fix tree after insertion/deletion - moving from initially affected node to root
+// Fix tree after insertion/deletion - moving from initially affected node to root
+AVLNode *avl_fix(AVLNode *node) {
     while (true) {
         avl_update(node);
         uint32_t l = avl_depth(node->left);
@@ -96,7 +84,8 @@ static AVLNode *avl_fix(AVLNode *node) {
     }
 }
 
-static AVLNode *avl_del(AVLNode *node) {
+// Delete node
+AVLNode *avl_del(AVLNode *node) {
     if (node->right == NULL) {
         // no right subtree -> replace with left subtree
         // Link left subtree to the parent
@@ -129,4 +118,31 @@ static AVLNode *avl_del(AVLNode *node) {
             return victim;
         }
     }
+}
+
+// Offset into succeeding/preceding node
+AVLNode *avl_offset(AVLNode *node, int64_t offset) {
+    int64_t pos = 0;
+    while (offset != pos) {
+        if (pos < offset && pos + avl_cnt(node->right) >= offset) {
+            // Target in right subtree
+            node = node->right;
+            pos += avl_cnt(node->left) + 1;
+        } else if (pos > offset && pos - avl_cnt(node->left) <= offset) {
+            // Target in left subtree
+            node = node->left;
+            pos -= avl_cnt(node->right) + 1;
+        } else {
+            // Goto parent
+            AVLNode *parent = node->parent;
+            if (!parent)
+                return NULL;
+            if (parent->right == node)
+                pos -= avl_cnt(node->left) + 1;
+            else
+                pos += avl_cnt(node->right) + 1;
+            node = parent;
+        }
+    }
+    return node;
 }
