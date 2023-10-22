@@ -12,16 +12,6 @@
 const size_t k_max_msg = 4096;
 const size_t k_max_args = 1024;
 
-static void msg(const char *msg) {
-    fprintf(stderr, "%s\n", msg);
-}
-
-static void die(const char *msg) {
-    int err = errno;
-    fprintf(stderr, "[%d], %s\n", err, msg);
-    abort();
-}
-
 // Hash code generator
 static uint64_t str_hash(const uint8_t *data, size_t len) {
     uint32_t h = 0x2A051586;

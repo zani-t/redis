@@ -3,7 +3,7 @@
 CASES = r'''
 $ ./client zscore asdf n1
 (nil)
-$ ./client zquery xxx asdf 1 10
+$ ./client zquery xxx 1 asdf 1 10
 (arr) len=0
 (arr) end
 $ ./client zadd zset 1 n1
@@ -33,7 +33,7 @@ $ ./client zrem zset asdf
 (int) 0
 $ ./client zrem zset n1
 (int) 1
-$ ./client zrem zset 1 "" 0 10
+$ ./client zquery zset 1 "" 0 10
 (arr) len=2
 (str) n2
 (dbl) 2

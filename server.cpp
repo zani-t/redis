@@ -1,3 +1,5 @@
+//*
+
 // #include "utils.hpp"
 #include <iostream>
 #include <cassert>
@@ -19,6 +21,16 @@
 #include "common.h"
 #include "hashtable.h"
 #include "zset.h"
+
+static void msg(const char *msg) {
+    fprintf(stderr, "%s\n", msg);
+}
+
+static void die(const char *msg) {
+    int err = errno;
+    fprintf(stderr, "[%d], %s\n", err, msg);
+    abort();
+}
 
 // Connection state
 enum {
@@ -184,11 +196,11 @@ static void out_nil(std::string &out) {
     out.push_back(SER_NIL);
 }
 
-static void out_str(std::string &out, const std::string &val, size_t size) {
+static void out_str(std::string &out, const char *s, size_t size) {
     out.push_back(SER_STR);
-    uint32_t len = (uint32_t)val.size();
+    uint32_t len = (uint32_t)size;
     out.append((char *)&len, 4);
-    out.append(val);
+    out.append(s, len);
 }
 
 static void out_str(std::string &out, const std::string &val){
@@ -205,7 +217,7 @@ static void out_dbl(std::string &out, double val) {
     out.append((char *)&val, 8);
 }
 
-static void out_err(std::string  &out, int32_t code, const std::string &msg) {
+static void out_err(std::string &out, int32_t code, const std::string &msg) {
     out.push_back(SER_ERR);
     out.append((char *)&code, 4);
     uint32_t len = (uint32_t)msg.size();
@@ -218,7 +230,8 @@ static void out_arr(std::string &out, uint32_t n) {
     out.append((char *)&n, 4);
 }
 
-static void out_update_arr(std::string&out, uint32_t n) {
+// Update & set output
+static void out_update_arr(std::string &out, uint32_t n) {
     assert(out[0] == SER_ARR);
     memcpy(&out[1], &n, 4);
 }
@@ -294,22 +307,6 @@ static void do_keys(std::vector<std::string> &cmd, std::string &out) {
     h_scan(&g_data.db.ht2, &cb_scan, &out);
 }
 
-// Determine request
-static void do_request(std::vector<std::string> &cmd, std::string &out) { 
-    if (cmd.size() == 1 && cmd_is(cmd[0], "keys"))
-        do_keys(cmd, out); 
-    else if (cmd.size() == 2 && cmd_is(cmd[0], "get"))
-        do_get(cmd, out);
-    else if (cmd.size() == 3 && cmd_is(cmd[0], "set"))
-        do_set(cmd, out);
-    else if (cmd.size() == 2 && cmd_is(cmd[0], "del"))
-        do_del(cmd, out);
-    else {
-        // Command not recognized
-        out_err(out, ERR_UNKNOWN, "Unknown cmd");
-    }
-}
-
 static bool str2dbl(const std::string &s, double &out) {
     char *endp = NULL;
     out = strtod(s.c_str(), &endp);
@@ -322,7 +319,7 @@ static bool str2int(const std::string &s, int64_t &out) {
     return endp == s.c_str() + s.size();
 }
 
-// ZAdd zset score name
+// zadd, zset, score, name
 static void do_zadd(std::vector<std::string> &cmd, std::string &out) {
     double score = 0;
     if (!str2dbl(cmd[2], score))
@@ -337,6 +334,7 @@ static void do_zadd(std::vector<std::string> &cmd, std::string &out) {
     Entry *ent = NULL;
     if (!hnode) {
         ent = new Entry();
+        ent->key.swap(key.key);
         ent->node.hcode = key.node.hcode;
         ent->type = T_ZSET;
         ent->zset = new ZSet();
@@ -371,7 +369,7 @@ static bool expect_zset(std::string &out, std::string &s, Entry **ent) {
     return true;
 }
 
-// ZRem ZSet name
+// zremove, zset, name
 static void do_zrem(std::vector<std::string> &cmd, std::string &out) {
     Entry *ent = NULL;
     if (!expect_zset(out, cmd[1], &ent))
@@ -385,7 +383,7 @@ static void do_zrem(std::vector<std::string> &cmd, std::string &out) {
     return out_int(out, znode ? 1 : 0);
 }
 
-// ZScore ZSet name
+// zscore, zset, name
 static void do_zscore(std::vector<std::string> &cmd, std::string &out) {
     Entry *ent = NULL;
     if (!expect_zset(out, cmd[1], &ent))
@@ -396,7 +394,7 @@ static void do_zscore(std::vector<std::string> &cmd, std::string &out) {
     return znode ? out_dbl(out, znode->score) : out_nil(out);
 }
 
-// ZQuery ZSet score name offset limit
+// zquery, zset, score, name, offset, limit
 static void do_zquery(std::vector<std::string> &cmd, std::string &out) {
     // Parse
     double score = 0;
@@ -411,7 +409,7 @@ static void do_zquery(std::vector<std::string> &cmd, std::string &out) {
     if (!str2int(cmd[5], limit))
         return out_err(out, ERR_ARG, "expect int");
 
-    // Get ZSet
+    // Get zset
     Entry *ent = NULL;
     if (!expect_zset(out, cmd[1], &ent)) {
         if(out[0] == SER_NIL) {
@@ -438,6 +436,30 @@ static void do_zquery(std::vector<std::string> &cmd, std::string &out) {
         n += 2;
     }
     return out_update_arr(out, n);
+}
+
+// Determine request
+static void do_request(std::vector<std::string> &cmd, std::string &out) {
+    if (cmd.size() == 1 && cmd_is(cmd[0], "keys"))
+        do_keys(cmd, out); 
+    else if (cmd.size() == 2 && cmd_is(cmd[0], "get"))
+        do_get(cmd, out);
+    else if (cmd.size() == 3 && cmd_is(cmd[0], "set"))
+        do_set(cmd, out);
+    else if (cmd.size() == 2 && cmd_is(cmd[0], "del"))
+        do_del(cmd, out);
+    else if (cmd.size() == 4 && cmd_is(cmd[0], "zadd"))
+        do_zadd(cmd, out);
+    else if (cmd.size() == 3 && cmd_is(cmd[0], "zrem"))
+        do_zrem(cmd, out);
+    else if (cmd.size() == 3 && cmd_is(cmd[0], "zscore"))
+        do_zscore(cmd, out);
+    else if (cmd.size() == 6 && cmd_is(cmd[0], "zquery")) {
+        do_zquery(cmd, out);
+    } else {
+        // Command not recognized
+        out_err(out, ERR_UNKNOWN, "Unknown cmd");
+    }
 }
 
 // Parse buffer request
@@ -659,3 +681,5 @@ int main() {
 
     return 0;
 }
+
+//*/

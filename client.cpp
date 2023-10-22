@@ -15,6 +15,16 @@
 
 #include "common.h"
 
+static void msg(const char *msg) {
+    fprintf(stderr, "%s\n", msg);
+}
+
+static void die(const char *msg) {
+    int err = errno;
+    fprintf(stderr, "[%d], %s\n", err, msg);
+    abort();
+}
+
 // Read n bytes from kernel [through several requests]
 static int32_t read_full(int fd, char *buf, size_t n) {
     while (n > 0) {
@@ -69,7 +79,7 @@ static int32_t send_req(int fd, const std::vector<std::string> &cmd) {
 // Deserialize
 static int32_t on_response(const uint8_t *data, size_t size) {
     if (size < 1) {
-        msg("bad response");
+        msg("bad response 0");
         return -1;
     }
     switch (data[0]) {
@@ -78,7 +88,7 @@ static int32_t on_response(const uint8_t *data, size_t size) {
             return 1;
         case SER_ERR:
             if (size < 1 + 8) {
-                msg("bad response");
+                msg("bad response 1");
                 return -1;
             }
             {
@@ -88,7 +98,7 @@ static int32_t on_response(const uint8_t *data, size_t size) {
                 memcpy(&code, &data[1], 4);
                 memcpy(&len, &data[1 + 4], 4);
                 if (size < 1 + 8 + len) {
-                    msg("bad response");
+                    msg("bad response 2");
                     return -1;
                 }
                 printf("(err) %d %.*s\n", code, len, &data[1 + 8]);
@@ -96,7 +106,7 @@ static int32_t on_response(const uint8_t *data, size_t size) {
             }
         case SER_STR:
             if (size < 1 + 4) {
-                msg("bad response 0");
+                msg("bad response 3");
                 return -1;
             }
             {
@@ -104,7 +114,7 @@ static int32_t on_response(const uint8_t *data, size_t size) {
                 uint32_t len = 0;
                 memcpy(&len, &data[1], 4);
                 if (size < 1 + 4 + len) {
-                    msg("bad response 1");
+                    msg("bad response 4");
                     return -1;
                 }
                 printf("(str) %.*s\n", len, &data[1 + 4]);
@@ -112,37 +122,49 @@ static int32_t on_response(const uint8_t *data, size_t size) {
             }
         case SER_INT:
             if (size < 1 + 8) {
-                msg("bad response");
+                msg("bad response 5");
                 return -1;
             }
             {
                 // Print int
-                int64_t val= 0;
+                int64_t val = 0;
                 memcpy(&val, &data[1], 8);
                 printf("(int) %ld\n", val);
                 return 1 + 8;
             }
+        case SER_DBL:
+            if (size < 1 + 8) {
+                msg("bad response 6");
+                return -1;
+            }
+            {
+                double val = 0;
+                memcpy(&val, &data[1], 8);
+                printf("(dbl) %g\n", val);
+                return 1 + 8;
+            }
         case SER_ARR:
             if (size < 1 + 4) {
-                msg("bad response");
+                msg("bad response 6");
                 return -1;
             }
             {
                 // Print recursively defined array protocol
                 uint32_t len = 0;
-                memcpy(&len, &data[1 + 4], 4);
+                memcpy(&len, &data[1], 4);
                 printf("(arr) len=%u\n", len);
                 size_t arr_bytes = 1 + 4;
                 for (uint32_t i = 0; i < len; ++i) {
                     int32_t rv = on_response(&data[arr_bytes], size - arr_bytes);
                     if (rv < 0)
                         return rv;
+                    arr_bytes += (size_t)rv;
                 }
                 printf("(arr) end\n");
-                return 1 + 8 + len;
+                return (int32_t)arr_bytes;
             }
         default:
-            msg("bad response");
+            msg("bad response 7");
             return -1;
     }
 }

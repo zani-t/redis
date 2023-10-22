@@ -136,7 +136,7 @@ ZNode *zset_pop(ZSet *zset, const char *name, size_t len) {
 
 // Range query - find (score, name) tuple >= argument -> offset relative
 ZNode *zset_query(
-    ZSet *zset, double score, const char *name, size_t  len, int64_t offset)
+    ZSet *zset, double score, const char *name, size_t len, int64_t offset)
 {
     AVLNode *found = NULL;
     AVLNode *cur = zset->tree;
