@@ -20,6 +20,7 @@
 
 #include "common.h"
 #include "hashtable.h"
+#include "list.h"
 #include "zset.h"
 
 static void msg(const char *msg) {
@@ -31,6 +32,8 @@ static void die(const char *msg) {
     fprintf(stderr, "[%d], %s\n", err, msg);
     abort();
 }
+
+const uint64_t k_idle_timeout_ms = 5 * 1000;
 
 // Connection state
 enum {
@@ -70,6 +73,9 @@ struct Conn {
     size_t wbuf_size = 0;
     size_t wbuf_sent = 0;
     uint8_t wbuf[4 + k_max_msg];
+
+    uint64_t idle_start = 0;
+    DList idle_list;
 };
 
 // Entry struct (intrusive data structure)
@@ -81,10 +87,19 @@ struct Entry {
     ZSet *zset = NULL;
 };
 
-// Key space
+// Global data - Key space,, connnection map, timers
 static struct {
     HMap db;
+    std::vector<Conn *> fd2conn;
+    DList idle_list;
 } g_data;
+
+// [Get time] - monotonic timestamp
+static uint64_t get_monotonic_usec() {
+    timespec tv = {0, 0};
+    clock_gettime(CLOCK_MONOTONIC, &tv);
+    return uint64_t(tv.tv_sec) * 1000000 + tv.tv_nsec / 1000;
+}
 
 // Set to nonblocking
 static void fd_set_nb(int fd) {
@@ -113,7 +128,7 @@ static void conn_put(std::vector<Conn *> &fd2conn, struct Conn *conn) {
 }
 
 // Accept new connection given fd
-static int32_t accept_new_conn(std::vector<Conn *> &fd2conn, int fd) {
+static int32_t accept_new_conn(int fd) {
     // Create socket address & connection fd
     struct sockaddr_in client_addr = {};
     socklen_t socklen = sizeof(client_addr);
@@ -136,7 +151,9 @@ static int32_t accept_new_conn(std::vector<Conn *> &fd2conn, int fd) {
     conn->rbuf_size = 0;
     conn->wbuf_size = 0;
     conn->wbuf_sent = 0;
-    conn_put(fd2conn, conn);
+    conn->idle_start = get_monotonic_usec();
+    dlist_insert_before(&g_data.idle_list, &conn->idle_list);
+    conn_put(g_data.fd2conn, conn);
     return 0;
 }
 
@@ -597,6 +614,11 @@ static void state_res(Conn *conn) {
 
 // [State machine for client connections]
 static void connection_io(Conn *conn) {
+    // Conn awoken by poll -> timer moved to end of list
+    conn->idle_start = get_monotonic_usec();
+    dlist_detach(&conn->idle_list);
+    dlist_insert_before(&g_data.idle_list, &conn->idle_list);
+
     if (conn->state == STATE_REQ)
         state_req(conn);
     else if (conn->state == STATE_RES)
@@ -605,7 +627,44 @@ static void connection_io(Conn *conn) {
         assert(0);
 }
 
+// Take first/nearest timer value and use to calculate poll timeout
+static uint32_t next_timer_ms() {
+    if (dlist_empty(&g_data.idle_list))
+        return 10000;   // No timer - arbitrary value
+    
+    uint64_t now_us = get_monotonic_usec();
+    Conn *next = container_of(g_data.idle_list.next, Conn, idle_list);
+    uint64_t next_us = next->idle_start + k_idle_timeout_ms * 1000;
+    if (next_us < now_us)
+        return 0;       // Missed
+    
+    return (uint32_t)((next_us - now_us) / 1000);
+}
+
+// Remove connection from list
+static void conn_done(Conn *conn) {
+    g_data.fd2conn[conn->fd] = NULL;
+    (void)close(conn->fd);
+    dlist_detach(&conn->idle_list);
+    free(conn);
+}
+
+// Check timer list to fire in due time
+static void process_timers() {
+    uint64_t now_us = get_monotonic_usec();
+    while (!dlist_empty(&g_data.idle_list)) {
+        Conn *next = container_of(g_data.idle_list.next, Conn, idle_list);
+        uint64_t next_us = next->idle_start + k_idle_timeout_ms * 1000;
+        if (next_us >= now_us)
+            break; // Not ready
+        
+        printf("removing idle connection: %d\n", next->fd);
+        conn_done(next);
+    }
+}
+
 int main() {
+    dlist_init(&g_data.idle_list);
     // Retrieve file desciptor - handler for given type of i/o resource
     // Parameters set IPv4 TCP socket
     int fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -632,11 +691,10 @@ int main() {
     if (rv)
         die("listen()");
 
-    std::vector<Conn *> fd2conn;          // Map of fds to client connections
     fd_set_nb(fd);                        // Set to nonblocking
-    std::vector<struct pollfd> poll_args; // Poll request arguments - fd, [status of data], ?
 
     // Event loop: General idea is to seach for active fds by polling and operate.
+    std::vector<struct pollfd> poll_args; // Poll request arguments - fd, [status of data], ?
     while (true) {
         poll_args.clear();
         // Listening [socket] fd in first position
@@ -644,7 +702,7 @@ int main() {
         poll_args.push_back(pfd);
         
         // Connection fds
-        for (Conn *conn : fd2conn) {
+        for (Conn *conn : g_data.fd2conn) {
             if (!conn)
                 continue;
             struct pollfd pfd = {};
@@ -656,27 +714,28 @@ int main() {
 
         // Poll for active fds
         // ** Replace with epoll **
-        int rv = poll(poll_args.data(), (nfds_t)poll_args.size(), 1000);
+        int timeout_ms = (int)next_timer_ms();
+        int rv = poll(poll_args.data(), (nfds_t)poll_args.size(), timeout_ms);
         if (rv < 0)
             die("poll");
         
         // Process active connections
         for (size_t i = 1; i < poll_args.size(); i++) {
             if (poll_args[i].revents) {
-                Conn *conn = fd2conn[poll_args[i].fd];
+                Conn *conn = g_data.fd2conn[poll_args[i].fd];
                 connection_io(conn);
                 if (conn->state == STATE_END) {
                     // Destroy
-                    fd2conn[conn->fd] = NULL;
-                    (void)close(conn->fd);
-                    free(conn);
+                    conn_done(conn);
                 }
             }
         }
 
+        process_timers();
+
         // Accept new connection if listening fd is active
         if (poll_args[0].revents)
-            (void)accept_new_conn(fd2conn, fd);
+            (void)accept_new_conn(fd);
     }
 
     return 0;
