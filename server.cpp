@@ -22,6 +22,7 @@
 #include "hashtable.h"
 #include "heap.h"
 #include "list.h"
+#include "thread_pool.h"
 #include "zset.h"
 
 static void msg(const char *msg) {
@@ -95,6 +96,7 @@ static struct {
     std::vector<Conn *> fd2conn;
     DList idle_list;
     std::vector<HeapItem> heap;
+    ThreadPool tp;
 } g_data;
 
 // [Get time] - monotonic timestamp
@@ -351,16 +353,37 @@ static void entry_set_ttl(Entry *ent, int64_t ttl_ms) {
     }
 }
 
-// Remove TTL with Entry
-static void entry_del(Entry *ent) {
+// Deallocate key
+static void entry_destroy(Entry *ent) {
     switch (ent->type) {
     case T_ZSET:
         zset_dispose(ent->zset);
         delete ent->zset;
         break;
     }
-    entry_set_ttl(ent, -1);
     delete ent;
+}
+
+static void entry_del_async(void *arg) {
+    entry_destroy((Entry *)arg);
+}
+
+// Dispose of Entry after detachment from key space
+static void entry_del(Entry *ent) {
+    entry_set_ttl(ent, -1);
+
+    const size_t k_large_container_size = 10000;
+    bool too_big = false;
+    switch (ent->type) {
+    case T_ZSET:
+        too_big = hm_size(&ent->zset->hmap) > k_large_container_size;
+        break;
+    }
+
+    if (too_big)
+        thread_pool_queue(&g_data.tp, &entry_del_async, ent);
+    else
+        entry_destroy(ent);
 }
 
 static bool str2dbl(const std::string &s, double &out) {
@@ -541,6 +564,10 @@ static void do_request(std::vector<std::string> &cmd, std::string &out) {
         do_set(cmd, out);
     else if (cmd.size() == 2 && cmd_is(cmd[0], "del"))
         do_del(cmd, out);
+    else if (cmd.size() == 3 && cmd_is(cmd[0], "pexpire"))
+        do_expire(cmd, out);
+    else if (cmd.size() == 2 && cmd_is(cmd[0], "pttl"))
+        do_ttl(cmd, out);
     else if (cmd.size() == 4 && cmd_is(cmd[0], "zadd"))
         do_zadd(cmd, out);
     else if (cmd.size() == 3 && cmd_is(cmd[0], "zrem"))
@@ -770,6 +797,8 @@ static void process_timers() {
 
 int main() {
     dlist_init(&g_data.idle_list);
+    thread_pool_init(&g_data.tp, 4);
+
     // Retrieve file desciptor - handler for given type of i/o resource
     // Parameters set IPv4 TCP socket
     int fd = socket(AF_INET, SOCK_STREAM, 0);
