@@ -1,6 +1,3 @@
-//*
-
-// #include "utils.hpp"
 #include <iostream>
 #include <cassert>
 #include <cerrno>
@@ -11,10 +8,10 @@
 #include <vector>
 
 #include <math.h>
-#include <fcntl.h>          // File descriptor control
-#include <poll.h>           // FD polling
-#include <unistd.h>         // Read & write functions
-#include <arpa/inet.h>      // Internet operations
+#include <fcntl.h>             // File descriptor control
+#include <poll.h>              // FD polling
+#include <unistd.h>            // Read & write functions
+#include <arpa/inet.h>         // Internet operations
 // #include <sys/socket.h>     // ...
 // #include <netinet/ip.h>     // ...
 
@@ -874,5 +871,3 @@ int main() {
 
     return 0;
 }
-
-//*/
