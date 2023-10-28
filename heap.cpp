@@ -7,11 +7,11 @@ static size_t heap_parent(size_t i) {
     return (i + 1) / 2 - 1;
 }
 
-static size_t heap_left(size_t i) {
+size_t heap_left(size_t i) {
     return i * 2 + 1;
 }
 
-static size_t heap_right(size_t i) {
+size_t heap_right(size_t i) {
     return i * 2 + 2;
 }
 
@@ -38,7 +38,7 @@ static void heap_down(HeapItem *a, size_t pos, size_t len) {
         size_t min_pos = -1;
         size_t min_val = t.val;
         if (l < len && a[l].val < min_val) {
-            min_pos = 1;
+            min_pos = l;
             min_val = a[l].val;
         }
         if (r < len && a[r].val < min_val)
