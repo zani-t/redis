@@ -1,6 +1,6 @@
 #include <cassert>
 
-#include "../avl.h"
+#include "../src/avl.h"
 
 // Get pointer to Entry struct of which HNode is a member
 #define container_of(ptr, type, member) ({                  \

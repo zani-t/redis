@@ -1,3 +1,6 @@
 .vscode/
-utils.cpp
-utils.hpp
+testing/test_avl
+testing/test_heap
+testing/test_offset
+client
+server

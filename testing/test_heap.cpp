@@ -2,7 +2,7 @@
 #include <map>
 #include <vector>
 
-#include "../heap.h"
+#include "../src/heap.h"
 
 /* struct Data {
     size_t heap_idx = -1;

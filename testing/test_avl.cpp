@@ -2,7 +2,7 @@
 #include <cstdlib>
 #include <set>
 
-#include "../avl.h"
+#include "../src/avl.h"
 
 #define container_of(ptr, type, member) ({                  \
     const typeof( ((type *)0)->member ) *__mptr = (ptr);    \
