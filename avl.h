@@ -17,6 +17,10 @@ inline void avl_init(AVLNode *node) {
     node->left = node->right = node->parent = NULL;
 }
 
+uint32_t avl_depth(AVLNode *node);
+uint32_t avl_cnt(AVLNode *node);
+uint32_t max(uint32_t lhs, uint32_t rhs);
+
 AVLNode *avl_fix(AVLNode *node);
 AVLNode *avl_del(AVLNode *node);
 AVLNode *avl_offset(AVLNode *node, int64_t offset);

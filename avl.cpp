@@ -3,15 +3,15 @@
 
 #include "avl.h"
 
-static uint32_t avl_depth(AVLNode *node) {
+uint32_t avl_depth(AVLNode *node) {
     return node ? node->depth : 0;
 }
 
-static uint32_t avl_cnt(AVLNode *node) {
+uint32_t avl_cnt(AVLNode *node) {
     return node ? node->cnt : 0;
 }
 
-static uint32_t max(uint32_t lhs, uint32_t rhs) {
+uint32_t max(uint32_t lhs, uint32_t rhs) {
     return lhs < rhs ? rhs : lhs;
 }
 
