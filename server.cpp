@@ -12,8 +12,8 @@
 #include <poll.h>              // FD polling
 #include <unistd.h>            // Read & write functions
 #include <arpa/inet.h>         // Internet operations
-// #include <sys/socket.h>     // ...
-// #include <netinet/ip.h>     // ...
+// #include <sys/socket.h>
+// #include <netinet/ip.h>
 
 #include "common.h"
 #include "hashtable.h"
@@ -41,7 +41,6 @@ enum {
     STATE_END = 2,
 };
 
-// ...
 enum {
     RES_OK = 0,
     RES_ERR = 1,
@@ -62,7 +61,7 @@ enum {
 
 struct Conn {
     int fd = -1;
-    uint32_t state = 0; // STATE_REQ or STATE_RES,, why 32 bits?
+    uint32_t state = 0; // STATE_REQ or STATE_RES
 
     // String buffer for reading
     size_t rbuf_size = 0;
@@ -211,6 +210,7 @@ static bool entry_eq(HNode *lhs, HNode *rhs) {
     return lhs->hcode == rhs->hcode && le->key == re->key;
 }
 
+// Send to output as type, defined by protocol
 static void out_nil(std::string &out) {
     out.push_back(SER_NIL);
 }
@@ -274,6 +274,7 @@ static void cb_scan(HNode *node, void *arg) {
     out_str(out, container_of(node, Entry, node)->key);
 }
 
+// Commands
 static void do_get(std::vector<std::string> &cmd, std::string &out) {
     Entry key;
     key.key.swap(cmd[1]);
@@ -625,7 +626,7 @@ static bool try_one_request(Conn *conn) {
     // Remove request from buffer
     size_t remain = conn->rbuf_size - 4 - len;
     if (remain) {
-        // ** Memmove only before read (as opposed to every request) **
+        // [Try memmove only before read]
         memmove(conn->rbuf, &conn->rbuf[4 + len], remain);
     }
     conn->rbuf_size = remain;
@@ -637,9 +638,8 @@ static bool try_one_request(Conn *conn) {
     return (conn->state == STATE_REQ);
 }
 
-// ...
+// Read request and send to buffer
 static bool try_fill_buffer(Conn *conn) {
-    // ...
     assert(conn->rbuf_size <sizeof(conn->rbuf));
     ssize_t rv = 0;
 
@@ -671,7 +671,7 @@ static bool try_fill_buffer(Conn *conn) {
     return (conn->state == STATE_REQ);
 }
 
-// ...
+// Flush data from buffer to be sent back
 static bool try_flush_buffer(Conn *conn) {
     ssize_t rv = 0;
     do {
@@ -701,18 +701,18 @@ static bool try_flush_buffer(Conn *conn) {
     return true;
 }
 
-// ...
+// Request action - read data until empty
 static void state_req(Conn *conn) {
     while (try_fill_buffer(conn)) {}
 }
 
-// ...
+// Response action - send data back
 static void state_res(Conn *conn) {
-    // ** Buffer multiple responses and write once **
+    // [Try - buffer multiple responses and write once]
     while (try_flush_buffer(conn)) {}
 }
 
-// [State machine for client connections]
+// State machine for client connections
 static void connection_io(Conn *conn) {
     // Conn awoken by poll -> timer moved to end of list
     conn->idle_start = get_monotonic_usec();
@@ -822,7 +822,7 @@ int main() {
     if (rv)
         die("listen()");
 
-    fd_set_nb(fd);                        // Set to nonblocking
+    fd_set_nb(fd); // Set to nonblocking
 
     // Event loop: General idea is to seach for active fds by polling and operate.
     std::vector<struct pollfd> poll_args; // Poll request arguments - fd, [status of data], ?
@@ -844,7 +844,7 @@ int main() {
         }
 
         // Poll for active fds
-        // ** Replace with epoll **
+        // [Try epoll]
         int timeout_ms = (int)next_timer_ms();
         int rv = poll(poll_args.data(), (nfds_t)poll_args.size(), timeout_ms);
         if (rv < 0)

@@ -1,17 +1,13 @@
-//*
-// #include "utils.hpp"
 #include <iostream>
 #include <cassert>
 #include <cstdlib>
 #include <cstring>
 #include <vector>
-
-// #include <stdint.h>         // ...
 #include <errno.h>          // Error handling
 #include <unistd.h>         // Read & write functions
 #include <arpa/inet.h>      // Internet operations
-// #include <sys/socket.h>     // ...
-// #include <netinet/ip.h>     // ...
+// #include <sys/socket.h>
+// #include <netinet/ip.h>
 
 #include "common.h"
 

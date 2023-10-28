@@ -2,6 +2,7 @@
 
 #include "thread_pool.h"
 
+// Consumer
 static void *worker(void *arg) {
     ThreadPool *tp = (ThreadPool *)arg;
     while (true) {
