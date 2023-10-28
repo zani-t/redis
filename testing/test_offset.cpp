@@ -1,6 +1,6 @@
 #include <cassert>
 
-#include "../avl.cpp"
+#include "../avl.h"
 
 // Get pointer to Entry struct of which HNode is a member
 #define container_of(ptr, type, member) ({                  \
@@ -76,5 +76,5 @@ static void test_case(uint32_t sz) {
 int main() {
     for (uint32_t i = 1; i < 500; ++i)
         test_case(i);
-    return;
+    return 0;
 }
