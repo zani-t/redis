@@ -58,8 +58,8 @@ static bool del(Container &c, uint32_t val) {
     return true;
 }
 
+// Validate tree structure
 static void avl_verify(AVLNode *parent,  AVLNode *node) {
-    // Validate tree structure
     if (!node)
         return;
 
