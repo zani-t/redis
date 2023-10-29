@@ -1,8 +1,4 @@
 .vscode/
 build/
-testing/build/
-testing/test_avl
-testing/test_heap
-testing/test_offset
 client
 server
