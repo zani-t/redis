@@ -40,6 +40,7 @@ $ ./client zquery zset 1 "" 0 10
 (arr) end
 '''
 
+import os
 import shlex
 import subprocess
 
@@ -57,6 +58,7 @@ for x in lines:
         outputs[-1] = outputs[-1] + x + '\n'
     
 assert len(cmds) == len(outputs)
+os.chdir('../build')
 for cmd, expect in zip(cmds, outputs):
     out = subprocess.check_output(shlex.split(cmd)).decode('utf-8')
     assert out == expect, f'cmd:{cmd} out:{out}'
